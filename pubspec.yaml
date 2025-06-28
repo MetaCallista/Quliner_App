@@ -1,0 +1,53 @@
+name: quliner_app
+description: "Aplikasi manajemen menu dan QR Code untuk UMKM Kuliner."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- PAKET BARU UNTUK ANIMASI ---
+  confetti: ^0.7.0
+
+  # --- DATABASE LOKAL (SQLite) ---
+  sqflite: ^2.3.2
+  path_provider: ^2.1.2
+
+  # --- PAKET PETA (OPENSTREETMAP) ---
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
+  http: ^1.2.1
+
+  # --- FITUR LAINNYA ---
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.0
+  permission_handler: ^11.3.1
+  
+  # --- PAKET BARU YANG DIREKOMENDASIKAN ---
+  image_gallery_saver_plus: ^4.0.1 # ✅ PAKET BARU
+
+  intl: ^0.19.0
+  shared_preferences: ^2.2.2
+  provider: ^6.1.1
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.1.0
+  geolocator: ^11.0.0
+  sqflite_common_ffi: ^2.3.2+1
+
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
