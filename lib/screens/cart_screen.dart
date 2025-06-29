@@ -29,8 +29,6 @@ class _CartScreenState extends State<CartScreen> {
   final List<String> _paymentMethods = [
     'Qris',
     'BRI',
-    'BCA',
-    'BNI',
     'Mandiri',
     'OVO',
     'DANA',

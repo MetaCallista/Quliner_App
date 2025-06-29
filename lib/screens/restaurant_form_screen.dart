@@ -38,16 +38,22 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final dbHelper = DatabaseHelper();
 
-  // Controllers
+  // --- KONTROLER LAMA ---
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _openingTimeController = TextEditingController();
   final TextEditingController _closingTimeController = TextEditingController();
+  // --- KONTROLER BARU UNTUK PEMBAYARAN ---
+  final TextEditingController _vaController = TextEditingController();
 
   // State
   final List<XFile> _newlySelectedImages = [];
-  List<String> _existingImagePaths = []; // Untuk menyimpan path gambar lama
+  List<String> _existingImagePaths = []; 
+  // --- STATE BARU UNTUK GAMBAR QRIS ---
+  XFile? _qrisImage; 
+  String? _existingQrisImagePath;
+
   final List<MenuItemController> _menuControllers = [];
   final MapController _mapController = MapController();
   LatLng? _selectedLocation;
@@ -55,7 +61,7 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
 
   bool _isEditMode = false;
   bool _isLoading = false;
-  bool _isDataLoaded = false; // Flag untuk menandai data lama sudah dimuat
+  bool _isDataLoaded = false; 
 
   static final LatLng _initialPosition = LatLng(-8.1164, 115.0878);
 
@@ -68,27 +74,29 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       _loadExistingData();
     } else {
       _isDataLoaded = true;
-      _addMenuItem(); // Tambah satu form menu kosong untuk restoran baru
+      _addMenuItem(); 
     }
   }
 
-  // FUNGSI BARU UNTUK MEMUAT DATA LAMA
   Future<void> _loadExistingData() async {
     setState(() => _isLoading = true);
 
     final fullRestaurant =
         await dbHelper.getFullRestaurantDetails(widget.restaurant!.id!);
 
-    // Isi controller dengan data yang ada
     _nameController.text = fullRestaurant.name;
     _descController.text = fullRestaurant.description ?? '';
     _addressController.text = fullRestaurant.address ?? '';
+    // --- MEMUAT DATA PEMBAYARAN LAMA ---
+    _vaController.text = fullRestaurant.virtualAccountNumber ?? '';
+    _existingQrisImagePath = fullRestaurant.qrisImagePath;
+    
+    // ... (sisa kode _loadExistingData tidak berubah)
 
     if (fullRestaurant.latitude != null) {
       _selectedLocation =
           LatLng(fullRestaurant.latitude!, fullRestaurant.longitude!);
     }
-
     if (fullRestaurant.openingTime != null &&
         fullRestaurant.openingTime!.isNotEmpty) {
       try {
@@ -107,8 +115,6 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
         _closingTimeController.text = _closingTime!.format(context);
       } catch (e) {/* Abaikan jika format salah */}
     }
-
-    // Muat menu lama ke dalam controllers
     for (var item in fullRestaurant.menuItems) {
       final controller = MenuItemController();
       controller.nameController.text = item.itemName;
@@ -116,12 +122,9 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       controller.descController.text = item.description ?? '';
       _menuControllers.add(controller);
     }
-    // Jika tidak ada menu, tambahkan satu form kosong
     if (_menuControllers.isEmpty) {
       _addMenuItem();
     }
-
-    // Muat path gambar lama
     _existingImagePaths =
         fullRestaurant.images.map((img) => img.imagePath).toList();
 
@@ -138,6 +141,7 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
     _addressController.dispose();
     _openingTimeController.dispose();
     _closingTimeController.dispose();
+    _vaController.dispose(); // <-- JANGAN LUPA DISPOSE KONTROLER BARU
     for (var controller in _menuControllers) {
       controller.dispose();
     }
@@ -145,40 +149,13 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
     super.dispose();
   }
 
-  void _addMenuItem() {
-    setState(() => _menuControllers.add(MenuItemController()));
-  }
-
-  void _removeMenuItem(int index) {
-    setState(() {
-      _menuControllers[index].dispose();
-      _menuControllers.removeAt(index);
-    });
-  }
-
-  Future<void> _pickImages() async {
+  // --- FUNGSI BARU UNTUK MEMILIH GAMBAR QRIS ---
+  Future<void> _pickQrisImage() async {
     final ImagePicker picker = ImagePicker();
-    final List<XFile> images = await picker.pickMultiImage();
-    if (images.isNotEmpty) {
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
       setState(() {
-        _newlySelectedImages.addAll(images);
-      });
-    }
-  }
-
-  Future<void> _selectTime(BuildContext context,
-      {required bool isOpening}) async {
-    final TimeOfDay? picked =
-        await showTimePicker(context: context, initialTime: TimeOfDay.now());
-    if (picked != null) {
-      setState(() {
-        if (isOpening) {
-          _openingTime = picked;
-          _openingTimeController.text = picked.format(context);
-        } else {
-          _closingTime = picked;
-          _closingTimeController.text = picked.format(context);
-        }
+        _qrisImage = image;
       });
     }
   }
@@ -190,11 +167,24 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
     final prefs = await SharedPreferences.getInstance();
     final currentUserId = prefs.getInt('userId');
     if (currentUserId == null) {
-      /* ... handle error ... */ return;
+      // ... handle error ... 
+      setState(() => _isLoading = false);
+      return;
     }
-
-    // Simpan gambar baru yang dipilih (jika ada)
+    
     final appDir = await getApplicationDocumentsDirectory();
+
+    // --- LOGIKA BARU UNTUK MENYIMPAN GAMBAR QRIS ---
+    String? newQrisImagePath;
+    if (_qrisImage != null) {
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${p.basename(_qrisImage!.path)}';
+      final savedImage =
+          await File(_qrisImage!.path).copy('${appDir.path}/$fileName');
+      newQrisImagePath = savedImage.path;
+    }
+    
+    // ... (logika penyimpanan gambar galeri tidak berubah)
     final List<RestaurantImage> newImagesForDb = [];
     for (var imageFile in _newlySelectedImages) {
       final fileName =
@@ -204,8 +194,8 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       newImagesForDb
           .add(RestaurantImage(restaurantId: 0, imagePath: savedImage.path));
     }
-
-    // Siapkan data menu dari form
+    
+    // ... (logika penyimpanan menu tidak berubah)
     final List<MenuItem> menuItemsForDb = [];
     for (var controller in _menuControllers) {
       if (controller.nameController.text.isNotEmpty &&
@@ -219,7 +209,7 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       }
     }
 
-    // Siapkan data restoran
+    // --- PERBARUI DATA RESTORAN DENGAN INFO PEMBAYARAN ---
     final restaurantData = Restaurant(
       id: _isEditMode ? widget.restaurant!.id : null,
       userId: currentUserId,
@@ -228,28 +218,56 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       address: _addressController.text,
       latitude: _selectedLocation?.latitude,
       longitude: _selectedLocation?.longitude,
-      openingTime: _openingTime != null
-          ? '${_openingTime!.hour.toString().padLeft(2, '0')}:${_openingTime!.minute.toString().padLeft(2, '0')}'
-          : null,
-      closingTime: _closingTime != null
-          ? '${_closingTime!.hour.toString().padLeft(2, '0')}:${_closingTime!.minute.toString().padLeft(2, '0')}'
-          : null,
+      openingTime: _openingTime != null ? '${_openingTime!.hour.toString().padLeft(2, '0')}:${_openingTime!.minute.toString().padLeft(2, '0')}' : null,
+      closingTime: _closingTime != null ? '${_closingTime!.hour.toString().padLeft(2, '0')}:${_closingTime!.minute.toString().padLeft(2, '0')}' : null,
+      // TAMBAHKAN DATA BARU DI SINI
+      virtualAccountNumber: _vaController.text,
+      qrisImagePath: newQrisImagePath ?? _existingQrisImagePath,
     );
 
-    // Kirim data ke database
+    // ... (sisa kode _saveForm tidak berubah)
     try {
       await dbHelper.saveRestaurantTransaction(
         restaurant: restaurantData,
         menuItems: menuItemsForDb,
-        newImages: newImagesForDb, // Kirim hanya gambar baru
+        newImages: newImagesForDb,
         isEditMode: _isEditMode,
       );
-    } catch (e) {/* ... handle error ... */} finally {
+    } catch (e) {
+        // ... handle error ...
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
 
     if (mounted && !_isLoading) {
       Navigator.of(context).pop(true);
+    }
+  }
+
+  // Sisa fungsi lain (add/remove menu, select time, pick images) tidak berubah...
+  void _addMenuItem() => setState(() => _menuControllers.add(MenuItemController()));
+  void _removeMenuItem(int index) {
+    setState(() {
+      _menuControllers[index].dispose();
+      _menuControllers.removeAt(index);
+    });
+  }
+  Future<void> _pickImages() async {
+    final List<XFile> images = await ImagePicker().pickMultiImage();
+    if (images.isNotEmpty) setState(() => _newlySelectedImages.addAll(images));
+  }
+  Future<void> _selectTime(BuildContext context, {required bool isOpening}) async {
+    final TimeOfDay? picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    if (picked != null) {
+      setState(() {
+        if (isOpening) {
+          _openingTime = picked;
+          _openingTimeController.text = picked.format(context);
+        } else {
+          _closingTime = picked;
+          _closingTimeController.text = picked.format(context);
+        }
+      });
     }
   }
 
@@ -284,6 +302,11 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
                     _buildSectionTitle('Foto Restoran'),
                     _buildImagePicker(),
                     const SizedBox(height: 24),
+                    // --- TAMBAHKAN BAGIAN FORM BARU DI SINI ---
+                    _buildSectionTitle('Informasi Pembayaran (Opsional)'),
+                    _buildPaymentForm(),
+                    const SizedBox(height: 24),
+                    // -----------------------------------------
                     _buildSectionTitle('Tandai Lokasi di Peta'),
                     _buildMapView(),
                     const SizedBox(height: 24),
@@ -291,23 +314,22 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
                     _buildMenuForm(),
                     const SizedBox(height: 40),
                     SizedBox(
-                    width: double.infinity, // Membuat button memenuhi lebar layar
-                    child: ElevatedButton.icon(
-                      onPressed: _saveForm,
-                      icon: const Icon(Icons.save,color: Colors.white),
-                      label: const Text('SIMPAN SEMUA DATA'),
-                      style: ElevatedButton.styleFrom(
-                        foregroundColor: Colors.white, // -> Mengubah warna ikon dan teks menjadi putih
-                        backgroundColor: Colors.teal, // -> Mengubah warna latar belakang button
-                        padding: const EdgeInsets.symmetric(vertical: 16), // Memberi tinggi pada button
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      width: double.infinity, 
+                      child: ElevatedButton.icon(
+                        onPressed: _saveForm,
+                        icon: const Icon(Icons.save, color: Colors.white),
+                        label: const Text('SIMPAN SEMUA DATA'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white, 
+                          backgroundColor: Colors.teal, 
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                            
                   ],
                 ),
               ),
@@ -315,6 +337,56 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
     );
   }
 
+  // --- WIDGET BARU UNTUK FORM PEMBAYARAN ---
+  Widget _buildPaymentForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _vaController,
+          decoration: const InputDecoration(
+            labelText: 'Nomor Rekening / Virtual Account',
+            hintText: 'Contoh: 1234567890',
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text('Gambar QRIS (Untuk Pembayaran)', style: TextStyle(color: Colors.grey, fontSize: 12)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            // Menampilkan preview gambar QRIS
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: _qrisImage != null
+                    ? Image.file(File(_qrisImage!.path), fit: BoxFit.cover)
+                    : (_existingQrisImagePath != null && _existingQrisImagePath!.isNotEmpty
+                        ? Image.file(File(_existingQrisImagePath!), fit: BoxFit.cover)
+                        : const Icon(Icons.qr_code_scanner, color: Colors.grey)),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickQrisImage,
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Unggah QRIS'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+
+  // Sisa helper widget tidak berubah
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -325,7 +397,6 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       ),
     );
   }
-
   Widget _buildInfoForm() {
     return Column(
       children: [
@@ -346,7 +417,6 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
           decoration: const InputDecoration(labelText: 'Alamat'),
         ),
         const SizedBox(height: 12),
-        // --- BAGIAN BARU: Input Jam Buka dan Tutup ---
         Row(
           children: [
             Expanded(
@@ -377,7 +447,6 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       ],
     );
   }
-
   Widget _buildImagePicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,18 +464,15 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
           style: const TextStyle(fontSize: 12, color: Colors.grey),
         ),
         const SizedBox(height: 10),
-        // Tampilkan gabungan gambar lama (jika edit) dan gambar baru yang dipilih
         Wrap(
           spacing: 8.0,
           runSpacing: 8.0,
           children: [
-            // Tampilkan gambar lama
             ..._existingImagePaths.map((path) => ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.file(File(path),
                       width: 80, height: 80, fit: BoxFit.cover),
                 )),
-            // Tampilkan gambar baru yang akan diupload
             ..._newlySelectedImages.map((file) => ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.file(File(file.path),
@@ -417,7 +483,6 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
       ],
     );
   }
-
   Widget _buildMenuForm() {
     return Column(
       children: [
@@ -491,19 +556,17 @@ class _RestaurantFormScreenState extends State<RestaurantFormScreen> {
         TextButton.icon(
           onPressed: _addMenuItem,
           icon: const Icon(Icons.add_circle_outline),
-          label: const Text('TAMBAH ITEM MENU'), // 1. Teks diubah jadi uppercase
+          label: const Text('TAMBAH ITEM MENU'), 
           style: TextButton.styleFrom(
-            // 2. Style ditambahkan untuk mengubah teks
             textStyle: const TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.bold, // Opsional: membuat teks menjadi tebal
+              fontWeight: FontWeight.bold, 
             ),
           ),
         ),
       ],
     );
   }
-
   Widget _buildMapView() {
     return Container(
       height: 250,

@@ -36,6 +36,8 @@ class Restaurant {
   final double? longitude;
   final String? openingTime;
   final String? closingTime;
+  final String? qrisImagePath;
+  final String? virtualAccountNumber;
   List<MenuItem> menuItems = [];
   List<RestaurantImage> images = [];
 
@@ -49,6 +51,8 @@ class Restaurant {
     this.longitude,
     this.openingTime,
     this.closingTime,
+    this.qrisImagePath,
+    this.virtualAccountNumber,
   });
 
   Map<String, dynamic> toMap() {
@@ -62,6 +66,8 @@ class Restaurant {
       'longitude': longitude,
       'openingTime': openingTime,
       'closingTime': closingTime,
+      'qrisImagePath': qrisImagePath,
+      'virtualAccountNumber': virtualAccountNumber,
     };
   }
 
@@ -76,6 +82,8 @@ class Restaurant {
       longitude: map['longitude'],
       openingTime: map['openingTime'],
       closingTime: map['closingTime'],
+      qrisImagePath: map['qrisImagePath'],
+      virtualAccountNumber: map['virtualAccountNumber'],
     );
   }
 }
@@ -231,15 +239,42 @@ class DatabaseHelper {
       path,
       version: 1, // Jika Anda melakukan perubahan lagi nanti, naikkan versi ini
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
       onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
     );
   }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+  if (oldVersion < 2) {
+    await db.execute("ALTER TABLE restaurants ADD COLUMN qrisImagePath TEXT");
+    await db.execute("ALTER TABLE restaurants ADD COLUMN virtualAccountNumber TEXT");
+  }
+}
+
+
   Future<void> _onCreate(Database db, int version) async {
     await db.execute(
-        '''CREATE TABLE users(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL)''');
+        '''CREATE TABLE users(
+          id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          name TEXT, 
+          email TEXT UNIQUE NOT NULL, 
+          password TEXT NOT NULL
+      )''');
     await db.execute(
-        '''CREATE TABLE restaurants(id INTEGER PRIMARY KEY AUTOINCREMENT, userId INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, address TEXT, latitude REAL, longitude REAL, openingTime TEXT, closingTime TEXT, FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE)''');
+      '''CREATE TABLE restaurants(
+          id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          userId INTEGER NOT NULL, 
+          name TEXT NOT NULL, 
+          description TEXT, 
+          address TEXT, 
+          latitude REAL, 
+          longitude REAL, 
+          openingTime TEXT, 
+          closingTime TEXT,
+          qrisImagePath TEXT,
+          virtualAccountNumber TEXT,
+          FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE
+      )''');
     await db.execute(
         '''CREATE TABLE menu_items(id INTEGER PRIMARY KEY AUTOINCREMENT, restaurantId INTEGER NOT NULL, itemName TEXT NOT NULL, description TEXT, price INTEGER NOT NULL, FOREIGN KEY (restaurantId) REFERENCES restaurants (id) ON DELETE CASCADE)''');
     await db.execute(
