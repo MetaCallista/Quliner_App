@@ -30,8 +30,6 @@ class _CartScreenState extends State<CartScreen> {
     'Qris',
     'BRI',
     'Mandiri',
-    'OVO',
-    'DANA',
     'Bayar di Kasir'
   ];
   String? _selectedPaymentMethod;
@@ -43,38 +41,35 @@ class _CartScreenState extends State<CartScreen> {
   }
 
 
-void _placeOrder(BuildContext context) async {
+// Di dalam file cart_screen.dart
+
+void _placeOrder(BuildContext context) {
+  // Fungsi ini tidak lagi 'async'
   final cart = Provider.of<CartProvider>(context, listen: false);
 
   if (_formKey.currentState!.validate()) {
-    try {
-      final newOrder = Order(
-        restaurantId: widget.restaurantId,
-        tableNumber: widget.tableNumberController.text,
-        notes: widget.notesController.text,
-        paymentMethod: _selectedPaymentMethod!,
-        totalPrice: cart.totalPrice,
-        orderTimestamp: DateTime.now(),
-        status: 'Pending',
-      );
-      
-      await dbHelper.insertOrder(newOrder, cart.items);
+    // 1. Tetap buat objek Order, tapi JANGAN simpan ke DB dulu
+    final newOrder = Order(
+      restaurantId: widget.restaurantId,
+      tableNumber: widget.tableNumberController.text,
+      notes: widget.notesController.text,
+      paymentMethod: _selectedPaymentMethod!,
+      totalPrice: cart.totalPrice,
+      orderTimestamp: DateTime.now(),
+      status: 'Pending',
+    );
 
-      if (mounted) {
-        Navigator.push( 
-          context,
-          MaterialPageRoute(
-            builder: (_) => PaymentInstructionScreen(order: newOrder),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memproses pesanan: $e')),
-        );
-      }
-    }
+    // 2. Langsung navigasi ke halaman instruksi
+    // Kirim 'newOrder' DAN 'cart.items' ke halaman selanjutnya
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentInstructionScreen(
+          order: newOrder,
+          cartItems: cart.items, // <-- OPER DATA ITEM KERANJANG
+        ),
+      ),
+    );
   }
 }
 
